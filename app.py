@@ -4,24 +4,17 @@ import os
 import json
 
 app = Flask(__name__)
-print("🚀 PPT Bot Started - Version 5 (AI Powered)")
+print("🚀 PPT Bot Started - Version 6 (Kimi AI Powered)")
 
 FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID")
 FEISHU_APP_SECRET = os.environ.get("FEISHU_APP_SECRET")
-OPENCLAW_API_KEY = os.environ.get("OPENCLAW_API_KEY")  # 可选，用于 AI 调用
+KIMI_API_KEY = os.environ.get("KIMI_API_KEY")
 
 print(f"APP_ID: {FEISHU_APP_ID}")
 print(f"APP_SECRET: {'***SET***' if FEISHU_APP_SECRET else '***NOT SET***'}")
+print(f"KIMI_API_KEY: {'***SET***' if KIMI_API_KEY else '***NOT SET***'}")
 
-# 简单的 PPT 模板库
-PPT_TEMPLATES = {
-    "商务": "商务专业风格，蓝色主调，适合企业介绍、项目汇报",
-    "科技": "科技感风格，深色背景，适合技术产品、创新项目",
-    "简约": "极简风格，留白充足，适合概念展示、设计提案",
-    "活力": "活力风格，色彩丰富，适合市场活动、团队建设",
-}
-
-# 用户会话状态存储（简单版，重启会丢失）
+# 用户会话状态存储
 user_sessions = {}
 
 
@@ -58,7 +51,6 @@ def send_message(token, receive_id, receive_id_type, text):
         "content": json.dumps({"text": text}, ensure_ascii=False)
     }
 
-    print(f"Sending message to: {receive_id}")
     res = requests.post(
         url, 
         headers=headers, 
@@ -76,137 +68,96 @@ def send_message(token, receive_id, receive_id_type, text):
         return False
 
 
-def generate_ppt_outline(topic, style="商务"):
-    """生成 PPT 大纲"""
+def call_kimi(prompt):
+    """调用 Kimi API 生成内容"""
+    if not KIMI_API_KEY:
+        return "⚠️ Kimi API Key 未配置"
     
-    # 根据主题生成结构化大纲
-    outline = f"""📊 《{topic}》PPT 大纲
-
-**一、封面页**
-- 标题：{topic}
-- 副标题：专业分析与解决方案
-- 风格：{PPT_TEMPLATES.get(style, PPT_TEMPLATES['商务'])}
-
-**二、目录页**
-1. 背景介绍
-2. 核心内容
-3. 数据分析
-4. 解决方案
-5. 总结展望
-
-**三、内容详情**
-
-【第1部分】背景介绍
-- 行业现状概述
-- 市场机遇分析
-- 项目/产品定位
-
-【第2部分】核心内容
-- 关键概念解析
-- 核心优势展示
-- 差异化特点
-
-【第3部分】数据分析
-- 关键数据指标
-- 趋势图表展示
-- 对比分析
-
-【第4部分】解决方案
-- 具体实施步骤
-- 预期效果
-- 风险与应对
-
-【第5部分】总结展望
-- 核心要点回顾
-- 未来发展规划
-- 行动呼吁
-
-**四、结束页**
-- 感谢语
-- 联系方式
-- 二维码（可选）
-
----
-💡 接下来你可以：
-• 回复"生成完整PPT" - 生成详细内容
-• 回复"换风格" - 选择其他模板风格
-• 回复具体修改意见 - 调整大纲内容"""
-
-    return outline
-
-
-def analyze_user_intent(text):
-    """分析用户意图"""
-    text = text.lower()
+    url = "https://api.moonshot.cn/v1/chat/completions"
     
-    # 检查是否是主题/需求描述
-    if any(word in text for word in ["ppt", "幻灯片", "大纲", "帮我做", "生成", "制作"]):
-        return "create_ppt", text.replace("ppt", "").replace("幻灯片", "").strip()
+    headers = {
+        "Authorization": f"Bearer {KIMI_API_KEY}",
+        "Content-Type": "application/json"
+    }
     
-    # 检查是否是风格选择
-    if any(word in text for word in ["风格", "模板", "样式", "主题"]):
-        for style in PPT_TEMPLATES.keys():
-            if style in text:
-                return "select_style", style
-        return "list_styles", None
+    data = {
+        "model": "moonshot-v1-8k",
+        "messages": [
+            {"role": "system", "content": "你是一个专业的PPT制作助手，擅长根据用户需求生成结构清晰、内容专业的PPT大纲。请用中文回复，使用Markdown格式。"},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7
+    }
     
-    # 检查是否是生成完整内容
-    if any(word in text for word in ["完整", "详细", "全部", "生成"]):
-        return "generate_full", None
-    
-    # 默认：获取主题
-    return "get_topic", text
+    try:
+        res = requests.post(url, headers=headers, json=data, timeout=30)
+        result = res.json()
+        
+        if "choices" in result and len(result["choices"]) > 0:
+            return result["choices"][0]["message"]["content"]
+        else:
+            print(f"Kimi API Error: {result}")
+            return "抱歉，AI 生成失败，请重试"
+    except Exception as e:
+        print(f"Kimi API Exception: {e}")
+        return f"调用 AI 出错: {str(e)}"
+
+
+def generate_ppt_with_ai(topic):
+    """使用 Kimi AI 生成 PPT 大纲"""
+    prompt = f"""请为"{topic}"生成一份专业的PPT大纲。
+
+要求：
+1. 包含封面、目录、内容页、结束页
+2. 内容要专业、有深度
+3. 每页给出标题和要点
+4. 适合商务演示风格
+5. 用Markdown格式输出
+
+请直接输出PPT大纲："""
+
+    return call_kimi(prompt)
 
 
 def handle_message(user_id, text):
-    """处理用户消息，返回回复内容"""
+    """处理用户消息"""
     
     # 获取或创建用户会话
     if user_id not in user_sessions:
-        user_sessions[user_id] = {"step": "welcome", "topic": None, "style": "商务"}
+        user_sessions[user_id] = {"step": "welcome"}
     
     session = user_sessions[user_id]
-    intent, data = analyze_user_intent(text)
     
-    print(f"User: {user_id}, Intent: {intent}, Data: {data}")
+    # 简单命令处理
+    text_lower = text.lower().strip()
     
-    # 欢迎状态
-    if session["step"] == "welcome":
-        if intent == "create_ppt" and data:
-            session["topic"] = data
-            session["step"] = "has_topic"
-            return generate_ppt_outline(data, session["style"])
+    if text_lower in ["帮助", "help", "?"]:
+        return """🤖 PPT助手使用指南
+
+我可以帮你：
+• 生成PPT大纲 - 直接发送主题
+• AI智能生成 - 发送"AI:主题"
+
+示例：
+"成都写字楼市场分析"
+"AI:新能源汽车行业报告"
+"年度工作总结"
+
+直接发送主题即可开始！"""
+    
+    # AI 模式
+    if text_lower.startswith("ai:") or text_lower.startswith("ai "):
+        topic = text[3:].strip()
+        if topic:
+            return generate_ppt_with_ai(topic)
         else:
-            return """你好！我是PPT助手 🤖
-
-我可以帮你快速生成 PPT 大纲和内容。
-
-请告诉我：
-• 你需要什么主题的 PPT？
-  例如："成都写字楼市场分析"、"产品介绍"、"年度总结"
-
-或直接发送主题，我会立即生成大纲！"""
+            return "请提供主题，例如：AI:成都写字楼市场分析"
     
-    # 已有主题
-    if session["step"] == "has_topic":
-        if intent == "select_style" and data:
-            session["style"] = data
-            return f"已切换至【{data}】风格！\n\n" + generate_ppt_outline(session["topic"], data)
-        
-        elif intent == "list_styles":
-            styles = "\n".join([f"• {k} - {v}" for k, v in PPT_TEMPLATES.items()])
-            return f"可选风格：\n{styles}\n\n请回复风格名称切换"
-        
-        elif intent == "create_ppt" and data:
-            session["topic"] = data
-            return generate_ppt_outline(data, session["style"])
-        
-        else:
-            # 把用户输入当作新的主题
-            session["topic"] = text
-            return generate_ppt_outline(text, session["style"])
+    # 普通模式 - 直接生成大纲
+    if len(text) > 2:
+        return generate_ppt_with_ai(text)
     
-    return "收到！请告诉我你需要什么主题的 PPT？"
+    return "请告诉我你需要什么主题的PPT？"
 
 
 @app.route("/webhook", methods=["POST"])
@@ -228,19 +179,20 @@ def webhook():
         
         token = get_tenant_token()
         if token and sender_id:
-            welcome = """👋 你好！我是PPT助手 🤖
+            welcome = """👋 你好！我是AI PPT助手 🤖
 
-我可以帮你：
-• 生成PPT大纲
-• 设计内容结构  
-• 推荐模板风格
+我可以调用 Kimi AI 为你生成专业PPT大纲！
 
-请直接发送主题，例如：
+使用方法：
+• 直接发送主题 → AI生成大纲
+• 发送"帮助" → 查看使用指南
+
+示例：
 "成都写字楼市场分析"
-"产品介绍PPT"
+"新能源汽车行业报告"
 "年度工作总结"
 
-我会立即为你生成专业大纲！"""
+请直接发送主题开始！"""
             send_message(token, sender_id, "open_id", welcome)
         return jsonify({"code": 0}), 200
     
@@ -280,7 +232,7 @@ def webhook():
 
 @app.route("/")
 def home():
-    return "✅ PPT Bot (AI Powered) is running!"
+    return "✅ PPT Bot (Kimi AI Powered) is running!"
 
 
 @app.route("/health")
