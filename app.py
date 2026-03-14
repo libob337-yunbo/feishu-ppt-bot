@@ -4,7 +4,7 @@ import os
 import json
 
 app = Flask(__name__)
-print("🚀 PPT Bot Started - Version 3")
+print("🚀 PPT Bot Started - Version 4")
 
 FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID")
 FEISHU_APP_SECRET = os.environ.get("FEISHU_APP_SECRET")
@@ -78,13 +78,18 @@ def webhook():
         print("Challenge received:", data["challenge"])
         return jsonify({"challenge": data["challenge"]})
     
-    # 获取事件类型
+    # 获取事件类型（从 header 中读取）
+    header = data.get("header", {})
+    event_type = header.get("event_type", "")
+    
+    # 获取事件数据
     event = data.get("event", {})
-    event_type = event.get("type", "")
+    
+    print(f"Event type: {event_type}")
     
     # 处理用户进入私聊事件
     if event_type == "im.chat.access_event.bot_p2p_chat_entered_v1":
-        sender_id = event.get("operator", {}).get("operator_id", {}).get("open_id")
+        sender_id = event.get("operator_id", {}).get("open_id")
         print(f"User entered chat: {sender_id}")
         
         token = get_tenant_token()
