@@ -283,7 +283,7 @@ def handle_message(user_id, text, chat_id, chat_type):
             return reply, None
         
         else:
-            return "请回复"确认"通过大纲，或"修改：xxx"告诉我修改意见", None
+            return "请回复'确认'通过大纲，或'修改:xxx'告诉我修改意见", None
     
     # 步骤3: 详细内容审核
     if session["step"] == STEP_DETAIL:
@@ -314,7 +314,7 @@ def handle_message(user_id, text, chat_id, chat_type):
             return reply, None
         
         else:
-            return "请回复"确认"生成PPT，或"重新生成"重新创建内容", None
+            return "请回复'确认'生成PPT，或'重新生成'重新创建内容", None
     
     # 步骤4: 生成中
     if session["step"] == STEP_GENERATING:
