@@ -3,7 +3,7 @@
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.dml.color import RgbColor
+from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 import os
@@ -13,13 +13,13 @@ from datetime import datetime
 
 # 商务简约配色方案
 COLORS = {
-    'primary': RgbColor(0x1E, 0x3A, 0x5F),      # 深蓝 #1E3A5F
-    'secondary': RgbColor(0x2E, 0x5C, 0x8A),    # 中蓝 #2E5C8A
-    'accent': RgbColor(0x4A, 0x90, 0xA4),       # 青蓝 #4A90A4
-    'text_dark': RgbColor(0x33, 0x33, 0x33),    # 深灰 #333333
-    'text_light': RgbColor(0x66, 0x66, 0x66),   # 浅灰 #666666
-    'white': RgbColor(0xFF, 0xFF, 0xFF),        # 白色
-    'bg_light': RgbColor(0xF5, 0xF7, 0xFA),     # 浅灰背景
+    'primary': RGBColor(0x1E, 0x3A, 0x5F),      # 深蓝 #1E3A5F
+    'secondary': RGBColor(0x2E, 0x5C, 0x8A),    # 中蓝 #2E5C8A
+    'accent': RGBColor(0x4A, 0x90, 0xA4),       # 青蓝 #4A90A4
+    'text_dark': RGBColor(0x33, 0x33, 0x33),    # 深灰 #333333
+    'text_light': RGBColor(0x66, 0x66, 0x66),   # 浅灰 #666666
+    'white': RGBColor(0xFF, 0xFF, 0xFF),        # 白色
+    'bg_light': RGBColor(0xF5, 0xF7, 0xFA),     # 浅灰背景
 }
 
 class PPTGenerator:
