@@ -571,7 +571,8 @@ def webhook():
         # 发送回复
         if reply_text:
             if chat_type == "p2p":
-                send_message(token, sender_id, "open_id", reply_text)
+                # 私聊模式下使用 chat_id 作为接收者（chat_id 在私聊中就是会话ID）
+                send_message(token, chat_id, "chat_id", reply_text)
             else:
                 send_message(token, chat_id, "chat_id", reply_text)
 
