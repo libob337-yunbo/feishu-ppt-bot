@@ -115,11 +115,7 @@ def handle_ai_response(conv_key, ai_response, chat_id, token):
     # 例如：[GENERATE_PPT] 表示要生成PPT文件
     
     if "[GENERATE_PPT]" in ai_response:
-        # 提取实际回复内容（去掉指令标记）
-        reply = ai_response.replace("[GENERATE_PPT]", "").strip()
-        # 发送回复
-        send_message(token, chat_id, "chat_id", reply)
-        # 异步生成PPT
+        # 异步生成PPT，不在这里发送消息
         def generate():
             state = get_state(conv_key)
             if state.get("outline"):
@@ -134,7 +130,7 @@ def handle_ai_response(conv_key, ai_response, chat_id, token):
                     send_file(token, chat_id, "chat_id", file_key)
                     update_state(conv_key, ppt_path=ppt_path)
         threading.Thread(target=generate).start()
-        return True
+        return False  # 返回False，让外层发送消息
     
     return False
 
@@ -228,15 +224,27 @@ def webhook():
         try:
             content = json.loads(content_str)
             user_text = content.get("text", "")
+            # 检查 mentions 字段
+            mentions = content.get("mentions", [])
         except:
             user_text = ""
+            mentions = []
         
-        # 检查是否被@（需要根据实际情况调整）
-        if "@" not in user_text:
+        # 检查是否被@了机器人
+        is_mentioned = False
+        for mention in mentions:
+            if mention.get("name") == "PPT助手" or "ppt" in mention.get("name", "").lower():
+                is_mentioned = True
+                break
+        
+        # 如果没有被@，忽略消息
+        if not is_mentioned and "@PPT" not in user_text and "@ppt" not in user_text:
+            print(f"群聊消息未被@，忽略: {user_text[:50]}")
             return jsonify({"code": 0}), 200
         
         # 去掉@内容
-        user_text = user_text.split(" ", 1)[-1].strip() if " " in user_text else ""
+        import re
+        user_text = re.sub(r'@\S+\s*', '', user_text).strip()
     else:
         content_str = message.get("content", "{}")
         try:
