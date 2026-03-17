@@ -23,6 +23,32 @@ user_sessions = {}
 # 消息去重 - 记录已处理的消息 ID
 processed_messages = set()
 
+# 会话持久化存储路径
+SESSION_FILE = "/tmp/ppt_bot_sessions.json"
+
+def load_sessions():
+    """从文件加载会话状态"""
+    global user_sessions
+    try:
+        if os.path.exists(SESSION_FILE):
+            with open(SESSION_FILE, 'r', encoding='utf-8') as f:
+                user_sessions = json.load(f)
+            print(f"已加载 {len(user_sessions)} 个会话")
+    except Exception as e:
+        print(f"加载会话失败: {e}")
+        user_sessions = {}
+
+def save_sessions():
+    """保存会话状态到文件"""
+    try:
+        with open(SESSION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(user_sessions, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"保存会话失败: {e}")
+
+# 启动时加载会话
+load_sessions()
+
 # 步骤定义
 STEP_TOPIC = "topic"
 STEP_OUTLINE = "outline"
@@ -221,6 +247,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
             "chat_type": chat_type,
             "user_id": user_id
         }
+        save_sessions()  # 保存新会话
 
     session = user_sessions[session_key]
     text_lower = text.lower().strip()
@@ -255,6 +282,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
             "chat_type": chat_type,
             "user_id": user_id
         }
+        save_sessions()
         return "已重置，请发送新的PPT主题", None
 
     # 步骤1: 等待主题
@@ -264,6 +292,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
         session["topic"] = text
         session["step"] = STEP_OUTLINE
+        save_sessions()
 
         # 异步生成大纲
         def on_outline_done(content, error):
@@ -271,9 +300,11 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                 send_message(token, chat_id, "chat_id", 
                            f"❌ 生成大纲失败: {error}")
                 session["step"] = STEP_TOPIC
+                save_sessions()
                 return
             
             session["outline"] = content
+            save_sessions()
             reply = f"""📋 已生成大纲：《{text}》
 
 {content}
@@ -295,6 +326,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
     if session["step"] == STEP_OUTLINE:
         if text_lower in ["确认", "确定", "ok", "yes", "通过"]:
             session["step"] = STEP_DETAIL
+            save_sessions()
 
             # 异步生成详细内容
             def on_detail_done(content, error):
@@ -302,9 +334,11 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                     send_message(token, chat_id, "chat_id",
                                f"❌ 生成内容失败: {error}")
                     session["step"] = STEP_OUTLINE
+                    save_sessions()
                     return
 
                 session["detail"] = content
+                save_sessions()
                 reply = f"""📝 已生成详细内容：《{session['topic']}》
 
 {content[:2000]}...
@@ -325,7 +359,8 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
         elif text_lower in ["重新生成", "再来一次", "regenerate"]:
             session["step"] = STEP_TOPIC
-            
+            save_sessions()
+
             def on_regenerate_done(content, error):
                 if error:
                     send_message(token, chat_id, "chat_id",
@@ -334,6 +369,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                 
                 session["outline"] = content
                 session["step"] = STEP_OUTLINE
+                save_sessions()
                 reply = f"""📋 重新生成的大纲：《{session['topic']}》
 
 {content}
@@ -361,8 +397,9 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                     send_message(token, chat_id, "chat_id",
                                f"❌ 修改失败: {error}")
                     return
-                
+
                 session["outline"] = content
+                save_sessions()
                 reply = f"""📋 根据你的意见修改后的大纲：
 
 {content}
@@ -381,6 +418,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
     if session["step"] == STEP_DETAIL:
         if text_lower in ["确认", "确定", "ok", "yes", "通过"]:
             session["step"] = STEP_GENERATING
+            save_sessions()
 
             def generate_and_send():
                 try:
@@ -420,6 +458,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                             "chat_type": chat_type,
                             "user_id": user_id
                         }
+                        save_sessions()
 
                         send_message(token, chat_id, "chat_id",
                                    f"✅ PPT《{topic}》已生成并发送！\n\n如需制作新的PPT，请直接发送主题。")
