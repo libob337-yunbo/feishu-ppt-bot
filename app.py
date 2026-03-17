@@ -94,7 +94,7 @@ def call_kimi(conv_key, user_message, state):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "kimi-k2",
+        "model": "moonshot-v1-128k",
         "messages": messages,
         "temperature": 0.7
     }
