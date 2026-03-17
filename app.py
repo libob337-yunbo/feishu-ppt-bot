@@ -224,21 +224,12 @@ def webhook():
         try:
             content = json.loads(content_str)
             user_text = content.get("text", "")
-            # 检查 mentions 字段
-            mentions = content.get("mentions", [])
         except:
             user_text = ""
-            mentions = []
         
-        # 检查是否被@了机器人
-        is_mentioned = False
-        for mention in mentions:
-            if mention.get("name") == "PPT助手" or "ppt" in mention.get("name", "").lower():
-                is_mentioned = True
-                break
-        
-        # 如果没有被@，忽略消息
-        if not is_mentioned and "@PPT" not in user_text and "@ppt" not in user_text:
+        # 检查是否被@了机器人（通过文本中的@）
+        # 飞书@机器人的格式通常是 @_user_4 或显示为@PPT助手
+        if "@" not in user_text and "_user_" not in user_text:
             print(f"群聊消息未被@，忽略: {user_text[:50]}")
             return jsonify({"code": 0}), 200
         
