@@ -269,6 +269,8 @@ def webhook():
     chat_type = message.get("chat_type")
     chat_id = message.get("chat_id")
     
+    print(f"收到消息 - chat_type: {chat_type}, chat_id: {chat_id}")
+    
     # 群聊需要被@才处理
     if chat_type != "p2p":
         content_str = message.get("content", "{}")
@@ -278,15 +280,21 @@ def webhook():
         except:
             user_text = ""
         
+        print(f"群聊消息内容: {user_text[:100]}")
+        
         # 检查是否被@了机器人（通过文本中的@）
         # 飞书@机器人的格式通常是 @_user_4 或显示为@PPT助手
-        if "@" not in user_text and "_user_" not in user_text:
-            print(f"群聊消息未被@，忽略: {user_text[:50]}")
+        has_mention = "@" in user_text or "_user_" in user_text
+        print(f"是否包含@: {has_mention}")
+        
+        if not has_mention:
+            print(f"群聊消息未被@，忽略")
             return jsonify({"code": 0}), 200
         
         # 去掉@内容
         import re
         user_text = re.sub(r'@\S+\s*', '', user_text).strip()
+        print(f"去掉@后的内容: {user_text[:50]}")
     else:
         content_str = message.get("content", "{}")
         try:
