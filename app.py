@@ -268,7 +268,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
         # 异步生成大纲
         def on_outline_done(content, error):
             if error:
-                send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", 
+                send_message(token, chat_id, "chat_id", 
                            f"❌ 生成大纲失败: {error}")
                 session["step"] = STEP_TOPIC
                 return
@@ -286,7 +286,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 • "修改：xxx" → 告诉我修改意见，我会重新生成
 • "重新生成" → 重新生成大纲
 • "取消" → 重新开始"""
-            send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", reply)
+            send_message(token, chat_id, "chat_id", reply)
 
         generate_outline(text, on_outline_done)
         return "🤔 正在生成大纲，请稍等...", None
@@ -299,7 +299,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
             # 异步生成详细内容
             def on_detail_done(content, error):
                 if error:
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"❌ 生成内容失败: {error}")
                     session["step"] = STEP_OUTLINE
                     return
@@ -318,7 +318,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 • "确认" → 开始生成PPT文件
 • "重新生成" → 重新生成详细内容
 • "取消" → 重新开始"""
-                send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", reply)
+                send_message(token, chat_id, "chat_id", reply)
 
             generate_detail_content(session["outline"], session["topic"], on_detail_done)
             return "🤔 正在生成详细内容，请稍等...", None
@@ -328,7 +328,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
             
             def on_regenerate_done(content, error):
                 if error:
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"❌ 重新生成失败: {error}")
                     return
                 
@@ -342,7 +342,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 ✅ 请审核以上大纲
 
 回复"确认"继续，或"修改"告诉我意见"""
-                send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", reply)
+                send_message(token, chat_id, "chat_id", reply)
 
             generate_outline(session["topic"], on_regenerate_done)
             return "🤔 正在重新生成大纲，请稍等...", None
@@ -358,7 +358,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
             def on_modify_done(content, error):
                 if error:
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"❌ 修改失败: {error}")
                     return
                 
@@ -369,7 +369,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
 ---
 回复"确认"继续，或继续提修改意见"""
-                send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", reply)
+                send_message(token, chat_id, "chat_id", reply)
 
             call_kimi_async(prompt, "你是一个专业的PPT制作专家。", on_modify_done)
             return "🤔 正在根据意见修改，请稍等...", None
@@ -388,7 +388,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                     outline = session["outline"]
                     detail = session.get("detail", "")
 
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"🎨 正在生成PPT文件：《{topic}》\n\n请稍等，预计需要15-30秒...")
 
                     print(f"开始生成PPT: {topic}")
@@ -397,13 +397,13 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
                     file_key = upload_file(token, ppt_path)
                     if not file_key:
-                        send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                        send_message(token, chat_id, "chat_id",
                                    "❌ 文件上传失败，请稍后重试")
                         session["step"] = STEP_DETAIL
                         return
 
                     print(f"文件已上传: {file_key}")
-                    success = send_file(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", file_key)
+                    success = send_file(token, chat_id, "chat_id", file_key)
 
                     if success:
                         try:
@@ -421,16 +421,16 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                             "user_id": user_id
                         }
 
-                        send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                        send_message(token, chat_id, "chat_id",
                                    f"✅ PPT《{topic}》已生成并发送！\n\n如需制作新的PPT，请直接发送主题。")
                     else:
-                        send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                        send_message(token, chat_id, "chat_id",
                                    "❌ 文件发送失败，请稍后重试")
                         session["step"] = STEP_DETAIL
 
                 except Exception as e:
                     print(f"生成PPT出错: {e}")
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"❌ 生成PPT时出错: {str(e)}\n请稍后重试或联系管理员")
                     session["step"] = STEP_DETAIL
 
@@ -443,7 +443,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
             
             def on_regenerate_detail(content, error):
                 if error:
-                    send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id",
+                    send_message(token, chat_id, "chat_id",
                                f"❌ 重新生成失败: {error}")
                     return
 
@@ -454,7 +454,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 {content[:1500]}...
 
 回复"确认"继续生成PPT，或"取消"重新开始"""
-                send_message(token, chat_id, "chat_id" if chat_type != "p2p" else "open_id", reply)
+                send_message(token, chat_id, "chat_id", reply)
 
             generate_detail_content(session["outline"], session["topic"], on_regenerate_detail)
             return "🤔 正在重新生成详细内容，请稍等...", None
