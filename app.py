@@ -466,12 +466,14 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                         send_message(token, chat_id, "chat_id",
                                    "❌ 文件发送失败，请稍后重试")
                         session["step"] = STEP_DETAIL
+                        save_sessions()
 
                 except Exception as e:
                     print(f"生成PPT出错: {e}")
                     send_message(token, chat_id, "chat_id",
                                f"❌ 生成PPT时出错: {str(e)}\n请稍后重试或联系管理员")
                     session["step"] = STEP_DETAIL
+                    save_sessions()
 
             thread = threading.Thread(target=generate_and_send)
             thread.start()
@@ -479,7 +481,8 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
         elif text_lower in ["重新生成", "再来一次"]:
             session["step"] = STEP_OUTLINE
-            
+            save_sessions()
+
             def on_regenerate_detail(content, error):
                 if error:
                     send_message(token, chat_id, "chat_id",
@@ -488,6 +491,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
 
                 session["detail"] = content
                 session["step"] = STEP_DETAIL
+                save_sessions()
                 reply = f"""📝 重新生成的详细内容：
 
 {content[:1500]}...
