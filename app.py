@@ -605,10 +605,14 @@ def webhook():
         chat_type = message.get("chat_type")
         chat_id = message.get("chat_id")
         
-        # 只处理私聊消息，忽略群聊消息
+        # 群聊消息需要被@才处理
         if chat_type != "p2p":
-            print(f"忽略群聊消息: chat_id={chat_id}")
-            return jsonify({"code": 0}), 200
+            # 检查消息中是否@了机器人
+            if "@_user_4" not in user_text and "@PPT" not in user_text and "@ppt" not in user_text:
+                print(f"群聊消息未被@，忽略: {user_text[:50]}")
+                return jsonify({"code": 0}), 200
+            # 去掉@的内容，保留实际指令
+            user_text = user_text.replace("@_user_4", "").replace("@PPT", "").replace("@ppt", "").strip()
         
         # 尝试多种方式获取发送者ID
         sender = message.get("sender", {})
