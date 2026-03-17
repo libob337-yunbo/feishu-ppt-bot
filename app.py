@@ -18,18 +18,40 @@ KIMI_API_KEY = os.environ.get("KIMI_API_KEY")
 conversations = {}
 MAX_HISTORY = 200
 
-# 消息去重 - 记录已处理的消息 ID
-processed_messages = set()
+# 消息去重 - 使用文件存储，支持多实例
+PROCESSED_MESSAGES_FILE = "/tmp/ppt_bot_processed_messages.json"
+processed_messages_lock = threading.Lock()
+
+def load_processed_messages():
+    """从文件加载已处理的消息ID"""
+    try:
+        if os.path.exists(PROCESSED_MESSAGES_FILE):
+            with open(PROCESSED_MESSAGES_FILE, 'r') as f:
+                return set(json.load(f))
+    except:
+        pass
+    return set()
+
+def save_processed_messages(messages):
+    """保存已处理的消息ID到文件"""
+    try:
+        with open(PROCESSED_MESSAGES_FILE, 'w') as f:
+            json.dump(list(messages), f)
+    except:
+        pass
 
 def check_and_record_message(message_id):
     """检查消息是否已处理，如果没有则记录"""
-    if message_id in processed_messages:
-        return True  # 已处理
-    processed_messages.add(message_id)
-    # 限制缓存大小
-    if len(processed_messages) > 1000:
-        processed_messages.clear()
-    return False
+    with processed_messages_lock:
+        processed_messages = load_processed_messages()
+        if message_id in processed_messages:
+            return True  # 已处理
+        processed_messages.add(message_id)
+        # 限制缓存大小，保留最近500条
+        if len(processed_messages) > 500:
+            processed_messages = set(list(processed_messages)[-500:])
+        save_processed_messages(processed_messages)
+        return False
 
 # 系统提示词
 SYSTEM_PROMPT = """你是专业的PPT制作助手，一个全能的PPT专家，擅长：
