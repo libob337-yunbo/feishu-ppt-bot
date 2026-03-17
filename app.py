@@ -449,11 +449,12 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                         except:
                             pass
 
+                        # 保存当前会话信息用于可能的修改
                         user_sessions[session_key] = {
-                            "step": STEP_TOPIC,
-                            "topic": None,
-                            "outline": None,
-                            "detail": None,
+                            "step": STEP_COMPLETE,
+                            "topic": topic,
+                            "outline": outline,
+                            "detail": detail,
                             "chat_id": chat_id,
                             "chat_type": chat_type,
                             "user_id": user_id
@@ -461,7 +462,7 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
                         save_sessions()
 
                         send_message(token, chat_id, "chat_id",
-                                   f"✅ PPT《{topic}》已生成并发送！\n\n如需制作新的PPT，请直接发送主题。")
+                                   f"✅ PPT《{topic}》已生成并发送！\n\n如需修改，请回复：\n• \"修改第X页：[内容]\"\n• \"调整样式\"\n• \"重新生成\"\n\n如需制作新的PPT，请直接发送主题。")
                     else:
                         send_message(token, chat_id, "chat_id",
                                    "❌ 文件发送失败，请稍后重试")
@@ -508,6 +509,67 @@ def handle_message(session_key, user_id, text, chat_id, chat_type, token):
     # 步骤4: 生成中
     if session["step"] == STEP_GENERATING:
         return "正在生成PPT中，请稍等...", None
+
+    # 步骤5: 已完成，支持修改
+    if session["step"] == STEP_COMPLETE:
+        if text_lower.startswith("修改"):
+            # 提取修改内容
+            modify_content = text[2:].strip() if len(text) > 2 else ""
+            if not modify_content:
+                return "请说明具体修改内容，例如：\"修改第3页：添加更多数据\"", None
+
+            # 进入修改流程
+            session["step"] = STEP_DETAIL  # 回到详细内容阶段
+            save_sessions()
+
+            def on_modify_ppt_done(content, error):
+                if error:
+                    send_message(token, chat_id, "chat_id",
+                               f"❌ 修改失败: {error}")
+                    session["step"] = STEP_COMPLETE
+                    save_sessions()
+                    return
+
+                session["detail"] = content
+                save_sessions()
+                reply = f"""📝 已根据修改意见更新内容：《{session['topic']}》
+
+{content[:1500]}...
+
+（内容较长，以上为预览）
+
+---
+✅ 请审核更新后的内容
+
+回复：
+• "确认" → 重新生成PPT文件
+• "继续修改" → 提出更多修改意见
+• "取消" → 保持原PPT"""
+                send_message(token, chat_id, "chat_id", reply)
+
+            # 调用AI根据修改意见生成新内容
+            modify_prompt = f"""请根据以下修改意见，更新PPT内容。
+
+原主题：{session['topic']}
+原大纲：{session['outline']}
+修改意见：{modify_content}
+
+请生成更新后的详细内容："""
+
+            call_kimi_async(modify_prompt, "你是一个专业的PPT内容修改专家。", on_modify_ppt_done)
+            return "🤔 正在根据修改意见更新内容，请稍等...", None
+
+        elif text_lower in ["重新生成", "再来一次"]:
+            # 回到详细内容阶段重新生成PPT
+            session["step"] = STEP_DETAIL
+            save_sessions()
+            return "已回到详细内容阶段，请回复\"确认\"重新生成PPT，或提出修改意见", None
+
+        elif text_lower in ["调整样式", "美化"]:
+            return "样式调整功能开发中，敬请期待！", None
+
+        else:
+            return "PPT已完成。如需修改，请回复\"修改：[具体意见]\"；如需新PPT，请直接发送主题", None
 
     # 默认
     return "请发送PPT主题开始制作", None
