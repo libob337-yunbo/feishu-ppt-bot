@@ -494,31 +494,6 @@ def webhook():
     if len(processed_messages) > 1000:
         processed_messages.clear()
 
-    # 用户进入私聊
-    if event_type == "im.chat.access_event.bot_p2p_chat_entered_v1":
-        sender_id = event.get("operator_id", {}).get("open_id")
-        token = get_tenant_token()
-        if token and sender_id:
-            welcome = """👋 你好！我是AI PPT助手 🤖
-
-我可以帮你：
-• AI生成专业大纲
-• 生成详细演讲内容  
-• 制作完整PPT文件
-
-【使用方法】
-直接发送主题，例如：
-"成都写字楼市场分析"
-
-我会：
-1️⃣ 生成大纲 → 请你审核
-2️⃣ 生成内容 → 请你确认
-3️⃣ 生成PPT → 发送给你
-
-发送"帮助"查看详细指南！"""
-            send_message(token, sender_id, "open_id", welcome)
-        return jsonify({"code": 0}), 200
-
     # 处理消息
     if event_type == "im.message.receive_v1":
         message = event.get("message", {})
