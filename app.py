@@ -605,6 +605,11 @@ def webhook():
         chat_type = message.get("chat_type")
         chat_id = message.get("chat_id")
         
+        # 只处理私聊消息，忽略群聊消息
+        if chat_type != "p2p":
+            print(f"忽略群聊消息: chat_id={chat_id}")
+            return jsonify({"code": 0}), 200
+        
         # 尝试多种方式获取发送者ID
         sender = message.get("sender", {})
         sender_id = sender.get("sender_id", {}).get("open_id")
