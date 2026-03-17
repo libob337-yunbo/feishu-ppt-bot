@@ -524,8 +524,18 @@ def webhook():
         message = event.get("message", {})
         chat_type = message.get("chat_type")
         chat_id = message.get("chat_id")
+        
+        # 尝试多种方式获取发送者ID
         sender = message.get("sender", {})
         sender_id = sender.get("sender_id", {}).get("open_id")
+        
+        # 如果 message 中没有，尝试从 event 根级别获取
+        if not sender_id:
+            sender_id = event.get("sender", {}).get("sender_id", {}).get("open_id")
+        
+        # 再尝试从 operator_id 获取（某些事件类型）
+        if not sender_id:
+            sender_id = event.get("operator_id", {}).get("open_id")
         
         # 获取消息内容
         content_str = message.get("content", "{}")
