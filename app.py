@@ -18,6 +18,19 @@ KIMI_API_KEY = os.environ.get("KIMI_API_KEY")
 conversations = {}
 MAX_HISTORY = 200
 
+# 消息去重 - 记录已处理的消息 ID
+processed_messages = set()
+
+def check_and_record_message(message_id):
+    """检查消息是否已处理，如果没有则记录"""
+    if message_id in processed_messages:
+        return True  # 已处理
+    processed_messages.add(message_id)
+    # 限制缓存大小
+    if len(processed_messages) > 1000:
+        processed_messages.clear()
+    return False
+
 # 系统提示词
 SYSTEM_PROMPT = """你是专业的PPT制作助手，一个全能的PPT专家，擅长：
 1. 根据用户需求设计PPT结构和内容
@@ -220,6 +233,12 @@ def webhook():
     header = data.get("header", {})
     event_type = header.get("event_type", "")
     event = data.get("event", {})
+    
+    # 消息去重
+    message_id = header.get("event_id", "")
+    if check_and_record_message(message_id):
+        print(f"重复消息，跳过: {message_id}")
+        return jsonify({"code": 0}), 200
     
     if event_type != "im.message.receive_v1":
         return jsonify({"code": 0}), 200
