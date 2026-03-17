@@ -537,6 +537,11 @@ def webhook():
         if not sender_id:
             sender_id = event.get("operator_id", {}).get("open_id")
         
+        # 备用方案：私聊模式下，如果还是获取不到，使用 chat_id 作为 sender_id
+        if not sender_id and chat_type == "p2p" and chat_id:
+            sender_id = chat_id
+            print(f"使用 chat_id 作为 sender_id: {sender_id}")
+        
         # 获取消息内容
         content_str = message.get("content", "{}")
         try:
