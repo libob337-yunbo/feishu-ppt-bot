@@ -13,6 +13,11 @@ print("🚀 AI PPT Bot Started")
 FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID")
 FEISHU_APP_SECRET = os.environ.get("FEISHU_APP_SECRET")
 KIMI_API_KEY = os.environ.get("KIMI_API_KEY")
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
+MINIMAX_GROUP_ID = os.environ.get("MINIMAX_GROUP_ID")
+
+# 选择使用的 AI 模型
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "kimi").lower()  # "kimi" 或 "minimax"
 
 # 对话历史存储
 conversations = {}
@@ -116,6 +121,65 @@ def update_state(conv_key, **kwargs):
     state = get_state(conv_key)
     state.update(kwargs)
     user_states[conv_key] = state
+
+def call_ai(conv_key, user_message, state):
+    """调用 AI API 进行对话（支持 Kimi 或 Minimax）"""
+    if AI_PROVIDER == "minimax":
+        return call_minimax(conv_key, user_message, state)
+    else:
+        return call_kimi(conv_key, user_message, state)
+
+def call_minimax(conv_key, user_message, state):
+    """调用 Minimax API 进行对话"""
+    if not MINIMAX_API_KEY:
+        return "⚠️ Minimax API Key 未配置"
+    if not MINIMAX_GROUP_ID:
+        return "⚠️ Minimax Group ID 未配置"
+
+    # 构建消息历史
+    messages = []
+    
+    # 添加历史对话
+    conv = get_conversation(conv_key)
+    for msg in conv:
+        role = "user" if msg["role"] == "user" else "assistant"
+        messages.append({"role": role, "content": msg["content"]})
+
+    # 添加当前消息（带系统提示）
+    system_content = SYSTEM_PROMPT.format(state=json.dumps(state, ensure_ascii=False))
+    full_message = f"{system_content}\n\n用户问题：{user_message}"
+    messages.append({"role": "user", "content": full_message})
+
+    url = "https://api.minimaxi.chat/v1/text/chatcompletion_v2"
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "MiniMax-M2.5",
+        "group_id": MINIMAX_GROUP_ID,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 8192
+    }
+
+    try:
+        res = requests.post(url, headers=headers, json=data, timeout=120)
+        result = res.json()
+        
+        # Minimax 响应格式处理
+        if "choices" in result and len(result["choices"]) > 0:
+            # Minimax 返回格式可能不同，适配处理
+            message_content = result["choices"][0].get("message", {}).get("content", "")
+            if not message_content:
+                message_content = result["choices"][0].get("text", "")
+            return message_content
+        elif "base_resp" in result and result["base_resp"].get("status_code") != 0:
+            return f"Minimax API 错误: {result['base_resp'].get('status_msg', '未知错误')}"
+        else:
+            return f"AI 响应错误: {result}"
+    except Exception as e:
+        return f"调用出错: {str(e)}"
 
 def call_kimi(conv_key, user_message, state):
     """调用 Kimi API 进行对话"""
@@ -326,7 +390,7 @@ def webhook():
     if not token:
         return jsonify({"code": 0}), 200
     
-    ai_response = call_kimi(conv_key, user_text, state)
+    ai_response = call_ai(conv_key, user_text, state)
     
     # 记录 AI 回复
     add_message(conv_key, "assistant", ai_response)
@@ -349,7 +413,8 @@ def health():
     return jsonify({
         "status": "ok",
         "conversations": len(conversations),
-        "version": "AI-1.0"
+        "version": "AI-1.0",
+        "ai_provider": AI_PROVIDER
     })
 
 if __name__ == "__main__":
