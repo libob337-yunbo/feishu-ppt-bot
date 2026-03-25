@@ -2,14 +2,25 @@
 # 使用 python-pptx 生成商务简约风格 PPT
 
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.chart.data import ChartData, CategoryChartData
 import os
 import json
 import re
 from datetime import datetime
+import io
+import base64
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.use('Agg')  # 非交互式后端
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 # 商务简约配色方案
 COLORS = {
@@ -160,8 +171,8 @@ class PPTGenerator:
         p.font.name = "Microsoft YaHei"
         p.alignment = PP_ALIGN.CENTER
         
-    def add_chart_slide(self, title, chart_data):
-        """添加图表页（简化版，使用表格展示数据）"""
+    def add_chart_slide(self, title, chart_data=None, chart_type='bar', categories=None, values=None, series_name='数据'):
+        """添加图表页（支持多种图表类型）"""
         slide_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(slide_layout)
         
@@ -184,13 +195,17 @@ class PPTGenerator:
         p.font.color.rgb = COLORS['primary']
         p.font.name = "Microsoft YaHei"
         
-        # 添加数据展示（使用文本框模拟图表说明）
-        if chart_data:
+        # 使用原生PPT图表
+        chart_values = values if values is not None else chart_data
+        if categories and chart_values:
+            self._add_native_chart(slide, chart_type, categories, chart_values, series_name)
+        else:
+            # 回退到文本展示
             content_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.5), Inches(12), Inches(5.5))
             tf = content_box.text_frame
             tf.word_wrap = True
             
-            for i, data in enumerate(chart_data):
+            for i, data in enumerate(chart_data or []):
                 if i == 0:
                     p = tf.paragraphs[0]
                 else:
@@ -200,6 +215,281 @@ class PPTGenerator:
                 p.font.color.rgb = COLORS['text_dark']
                 p.font.name = "Microsoft YaHei"
                 p.space_before = Pt(8)
+    
+    def _add_native_chart(self, slide, chart_type, categories, values, series_name):
+        """添加PPT原生图表"""
+        # 图表类型映射
+        chart_type_map = {
+            'bar': XL_CHART_TYPE.BAR_CLUSTERED,
+            'column': XL_CHART_TYPE.COLUMN_CLUSTERED,
+            'pie': XL_CHART_TYPE.PIE,
+            'line': XL_CHART_TYPE.LINE,
+            'doughnut': XL_CHART_TYPE.DOUGHNUT,
+        }
+        
+        xl_chart_type = chart_type_map.get(chart_type, XL_CHART_TYPE.COLUMN_CLUSTERED)
+        
+        # 准备图表数据
+        chart_data = CategoryChartData()
+        chart_data.categories = categories
+        chart_data.add_series(series_name, values)
+        
+        # 添加图表到幻灯片
+        x, y, cx, cy = Inches(1), Inches(1.8), Inches(11), Inches(5)
+        chart = slide.shapes.add_chart(
+            xl_chart_type, x, y, cx, cy, chart_data
+        ).chart
+        
+        # 设置图表样式
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        
+        # 设置字体
+        chart.font.size = Pt(12)
+        chart.font.name = "Microsoft YaHei"
+    
+    def add_kpi_slide(self, title, kpis, layout='grid'):
+        """添加KPI展示页"""
+        slide_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(slide_layout)
+        
+        # 顶部色条
+        header = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(0), Inches(0),
+            Inches(13.333), Inches(0.15)
+        )
+        header.fill.solid()
+        header.fill.fore_color.rgb = COLORS['primary']
+        header.line.fill.background()
+        
+        # 标题
+        title_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(12), Inches(0.8))
+        tf = title_box.text_frame
+        p = tf.paragraphs[0]
+        p.text = title
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.color.rgb = COLORS['primary']
+        p.font.name = "Microsoft YaHei"
+        
+        if layout == 'large' and kpis:
+            # 单个大KPI布局
+            kpi = kpis[0]
+            
+            # 大数字
+            value_box = slide.shapes.add_textbox(Inches(1), Inches(2.5), Inches(11), Inches(2))
+            tf = value_box.text_frame
+            p = tf.paragraphs[0]
+            p.text = f"{kpi['value']}{kpi.get('unit', '')}"
+            p.font.size = Pt(72)
+            p.font.bold = True
+            p.font.color.rgb = COLORS['primary']
+            p.font.name = "Microsoft YaHei"
+            p.alignment = PP_ALIGN.CENTER
+            
+            # KPI名称
+            name_box = slide.shapes.add_textbox(Inches(1), Inches(4.5), Inches(11), Inches(0.8))
+            tf = name_box.text_frame
+            p = tf.paragraphs[0]
+            p.text = kpi['name']
+            p.font.size = Pt(24)
+            p.font.color.rgb = COLORS['text_dark']
+            p.font.name = "Microsoft YaHei"
+            p.alignment = PP_ALIGN.CENTER
+            
+            # 变化值
+            if 'change' in kpi:
+                change_box = slide.shapes.add_textbox(Inches(1), Inches(5.3), Inches(11), Inches(0.6))
+                tf = change_box.text_frame
+                p = tf.paragraphs[0]
+                p.text = kpi['change']
+                p.font.size = Pt(18)
+                p.font.color.rgb = COLORS['accent'] if '+' in str(kpi['change']) else COLORS['secondary']
+                p.font.name = "Microsoft YaHei"
+                p.alignment = PP_ALIGN.CENTER
+        else:
+            # 2x2网格布局
+            positions = [
+                (Inches(0.8), Inches(1.5)),
+                (Inches(6.8), Inches(1.5)),
+                (Inches(0.8), Inches(4.2)),
+                (Inches(6.8), Inches(4.2)),
+            ]
+            
+            for i, kpi in enumerate(kpis[:4]):
+                if i >= len(positions):
+                    break
+                    
+                x, y = positions[i]
+                
+                # KPI卡片背景
+                card = slide.shapes.add_shape(
+                    MSO_SHAPE.ROUNDED_RECTANGLE, x, y,
+                    Inches(5.5), Inches(2.5)
+                )
+                card.fill.solid()
+                card.fill.fore_color.rgb = COLORS['bg_light']
+                card.line.fill.background()
+                
+                # KPI值
+                value_box = slide.shapes.add_textbox(x + Inches(0.3), y + Inches(0.4), Inches(5), Inches(1))
+                tf = value_box.text_frame
+                p = tf.paragraphs[0]
+                p.text = f"{kpi['value']}{kpi.get('unit', '')}"
+                p.font.size = Pt(36)
+                p.font.bold = True
+                p.font.color.rgb = COLORS['primary']
+                p.font.name = "Microsoft YaHei"
+                
+                # KPI名称
+                name_box = slide.shapes.add_textbox(x + Inches(0.3), y + Inches(1.4), Inches(5), Inches(0.5))
+                tf = name_box.text_frame
+                p = tf.paragraphs[0]
+                p.text = kpi['name']
+                p.font.size = Pt(14)
+                p.font.color.rgb = COLORS['text_dark']
+                p.font.name = "Microsoft YaHei"
+                
+                # 变化值
+                if 'change' in kpi:
+                    change_box = slide.shapes.add_textbox(x + Inches(0.3), y + Inches(1.9), Inches(5), Inches(0.4))
+                    tf = change_box.text_frame
+                    p = tf.paragraphs[0]
+                    p.text = kpi['change']
+                    p.font.size = Pt(12)
+                    p.font.color.rgb = COLORS['accent'] if '+' in str(kpi['change']) else COLORS['secondary']
+                    p.font.name = "Microsoft YaHei"
+    
+    def add_matplotlib_chart_slide(self, title, matplotlib_fig):
+        """添加matplotlib图表页（将matplotlib图表转为图片插入）"""
+        slide_layout = self.prs.slide_layouts[6]
+        slide = self.prs.slides.add_slide(slide_layout)
+        
+        # 顶部色条
+        header = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(0), Inches(0),
+            Inches(13.333), Inches(0.15)
+        )
+        header.fill.solid()
+        header.fill.fore_color.rgb = COLORS['primary']
+        header.line.fill.background()
+        
+        # 标题
+        title_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(12), Inches(0.8))
+        tf = title_box.text_frame
+        p = tf.paragraphs[0]
+        p.text = title
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.color.rgb = COLORS['primary']
+        p.font.name = "Microsoft YaHei"
+        
+        # 将matplotlib图表保存为图片并插入
+        if matplotlib_fig:
+            img_stream = io.BytesIO()
+            matplotlib_fig.savefig(img_stream, format='png', dpi=150, bbox_inches='tight')
+            img_stream.seek(0)
+            
+            slide.shapes.add_picture(
+                img_stream, 
+                Inches(1), Inches(1.5), 
+                width=Inches(11)
+            )
+            plt.close(matplotlib_fig)
+    
+    def create_pie_chart(self, labels, values, title="", colors=None):
+        """创建matplotlib饼图并返回figure对象"""
+        if not MATPLOTLIB_AVAILABLE:
+            return None
+            
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # 使用配色方案
+        pie_colors = colors or ['#1E3A5F', '#2E5C8A', '#4A90A4', '#7FB3D5', '#B8D4E3']
+        
+        wedges, texts, autotexts = ax.pie(
+            values, labels=labels, autopct='%1.1f%%',
+            colors=pie_colors[:len(values)],
+            startangle=90, textprops={'fontsize': 12}
+        )
+        
+        # 设置标题
+        if title:
+            ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
+        
+        plt.tight_layout()
+        return fig
+    
+    def create_bar_chart(self, categories, values, title="", horizontal=False):
+        """创建matplotlib柱状图并返回figure对象"""
+        if not MATPLOTLIB_AVAILABLE:
+            return None
+            
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # 使用主色调
+        bar_color = '#1E3A5F'
+        
+        if horizontal:
+            bars = ax.barh(categories, values, color=bar_color)
+            ax.set_xlabel('数值', fontsize=12)
+        else:
+            bars = ax.bar(categories, values, color=bar_color)
+            ax.set_ylabel('数值', fontsize=12)
+            plt.xticks(rotation=15, ha='right')
+        
+        # 添加数值标签
+        for bar in bars:
+            if horizontal:
+                width = bar.get_width()
+                ax.text(width, bar.get_y() + bar.get_height()/2, 
+                       f'{width}', ha='left', va='center', fontsize=10)
+            else:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, height,
+                       f'{height}', ha='center', va='bottom', fontsize=10)
+        
+        # 设置标题
+        if title:
+            ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
+        
+        # 设置网格
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        
+        plt.tight_layout()
+        return fig
+    
+    def create_line_chart(self, x_data, y_data, title="", xlabel="", ylabel=""):
+        """创建matplotlib折线图并返回figure对象"""
+        if not MATPLOTLIB_AVAILABLE:
+            return None
+            
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # 使用主色调
+        line_color = '#1E3A5F'
+        
+        ax.plot(x_data, y_data, marker='o', linewidth=2.5, 
+                color=line_color, markersize=8, markerfacecolor='#4A90A4')
+        
+        # 填充区域
+        ax.fill_between(x_data, y_data, alpha=0.3, color=line_color)
+        
+        # 设置标签
+        if xlabel:
+            ax.set_xlabel(xlabel, fontsize=12)
+        if ylabel:
+            ax.set_ylabel(ylabel, fontsize=12)
+        if title:
+            ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
+        
+        # 设置网格
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        
+        plt.tight_layout()
+        return fig
                 
     def add_end_slide(self, message="谢谢观看"):
         """添加结束页"""
